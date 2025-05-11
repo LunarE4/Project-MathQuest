@@ -1,12 +1,14 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
+import './index.css';
 
-const rootElement = document.getElementById('root');
-
-// Debug: Verify the root element exists
-console.log('Root element:', rootElement); // Should log the DIV
-
-// Debug: Test basic rendering
-const testRoot = ReactDOM.createRoot(rootElement);
-testRoot.render(<h1>TEST</h1>); // Temporarily replace <App />
+const root = createRoot(document.getElementById('root'));
+root.render(
+  <StrictMode>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </StrictMode>
+);
