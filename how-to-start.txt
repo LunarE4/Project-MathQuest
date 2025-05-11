@@ -1,0 +1,16 @@
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+Complete Windows-Safe Reset to Run React
+
+cd frontend
+npm cache clean --force
+Remove-Item -Recurse -Force node_modules
+Remove-Item -Force package-lock.json
+npm install
+npm start
+
+
+Required Dependancies
+
+npm install react-router-dom
+npm install phaser

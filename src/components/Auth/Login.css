@@ -1,0 +1,93 @@
+/* Base Styles */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #003231;
+  box-sizing: border-box;
+}
+
+* {
+  box-sizing: inherit;
+}
+
+.login-box {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+/* Logo Styles */
+.logo-container {
+  margin-bottom: 30px;
+}
+
+.app-logo {
+  height: 140px;
+  width: auto;
+  margin-bottom: 10px;
+}
+
+.logo-fallback {
+  display: none;
+  color: #4a5568;
+  font-size: 28px;
+  margin: 0;
+}
+
+/* Text Styles */
+h2 {
+  color: #2d3748;
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+p {
+  color: #718096;
+  margin-bottom: 30px;
+  font-size: 18px;
+}
+
+/* Google Button */
+.google-signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  background: white;
+  color: #5f6368;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.google-signin-btn:hover {
+  background: #f8f9fa;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.google-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .login-box {
+    padding: 30px 20px;
+  }
+  
+  .app-logo {
+    height: 60px;
+  }
+}

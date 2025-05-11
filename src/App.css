@@ -1,0 +1,53 @@
+/* src/App.css */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: none;
+}
+
+.app-header {
+  background: #1a1a2e;
+  border: 0px solid #2a2a3a;
+  border-bottom-width: 4px; 
+  color: white;
+  display: flex;
+  width: 100%;
+  padding: 1rem 1rem;
+  align-items: center;
+}
+
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.spinner {
+  border: 5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 5px solid #ffffff;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* NEW ADDITIONS - HEADER MATHQUEST */
+
+.app-container h1 {
+  font-size: 40px;
+  color: aliceblue;
+}

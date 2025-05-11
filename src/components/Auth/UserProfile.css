@@ -1,0 +1,114 @@
+/* User Profile Container */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto; /* Maintains right-side alignment */
+  margin-right: 1rem; /* NEW: Pushes left from edge */
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 50px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transform: translateX(-20px); /* NEW: Fine-tune positioning */
+  position: relative; /* NEW: For precise control */
+}
+
+/* Avatar with subtle grow effect */
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--primary);
+  transition: transform 0.3s ease;
+  position: relative;
+  right: 14px;
+  order: 2; /* Moves avatar to the rightmost position */
+}
+
+/* Logout button styling */
+.logout-btn {
+  background: none;
+  border: none;
+  color: var(--text-medium);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  order: 1; /* Logout comes before avatar */
+}
+
+/* Vertical separator */
+.logout-btn::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin-left: 0.75rem;
+  margin-right: 0.75rem;
+}
+
+/* Hover states */
+.user-profile:hover {
+  background: rgba(72, 86, 110, 0.7);
+}
+
+.logout-btn:hover {
+  color: var(--primary);
+}
+
+.user-avatar:hover {
+  transform: scale(1.1);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .user-profile {
+    background: rgba(45, 55, 72, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .logout-btn {
+    color: var(--text-light);
+  }
+  
+  .logout-btn:hover {
+    color: var(--primary-light);
+  }
+}
+
+/* Mobile adjustment */
+@media (max-width: 768px) {
+  .user-profile {
+    margin-right: 1rem; /* Less space on mobile */
+    transform: translateX(-10px);
+    padding: 0.35rem 0.75rem;
+  }
+  
+  .logout-btn span {
+    display: none;
+  }
+  
+  .logout-btn::before {
+    content: "→";
+    display: inline-block;
+    margin-right: 0;
+  }
+  
+  .logout-btn::after {
+    display: none;
+  }
+  
+  .user-avatar {
+    width: 32px;
+    height: 32px;
+  }
+}

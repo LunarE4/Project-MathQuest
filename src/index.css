@@ -1,0 +1,29 @@
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Full-page animated background */
+body {
+  background: #2a2a3a;
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
