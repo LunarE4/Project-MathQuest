@@ -3,12 +3,14 @@ import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
+  apiKey: "AIzaSyACIMD6G3b5sOtwf4My7uOua4NjGzqVdyI",
+  authDomain: "mathquest-82ac7.firebaseapp.com",
+  projectId: "mathquest-82ac7",
+  storageBucket: "mathquest-82ac7.firebasestorage.app",
+  messagingSenderId: "121975033868",
+  appId: "1:121975033868:web:8b83e54b4efef12eb09e29",
+  measurementId: "G-6ZDXZ7JP6Y",
+  databaseURL: "https://mathquest-82ac7-default-rtdb.europe-west1.firebasedatabase.app"
 };
 
 // Initialize Firebase
