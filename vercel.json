@@ -12,7 +12,16 @@
     }
   ],
   "routes": [
-    { "src": "/static/(.*)", "headers": { "cache-control": "public,max-age=31536000,immutable" } },
-    { "src": "/(.*)", "dest": "/index.html" }
+    // Cache static assets aggressively
+    {
+      "src": "/static/(.*)",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" }
+    },
+    // Serve all other routes via index.html (SPA fallback)
+    {
+      "src": "/(.*)",
+      "dest": "/index.html",
+      "headers": { "cache-control": "no-cache" }  // Disable cache for HTML
+    }
   ]
 }
