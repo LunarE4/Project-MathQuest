@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from './firebase/init';
+import { db } from '../../firebase/init';
 import './dashboard.css';
-import { ACHIEVEMENTS } from './achievements';
+import { ACHIEVEMENTS } from '../../achievements';
 
 export default function Dashboard() {
   const { user } = useAuth();

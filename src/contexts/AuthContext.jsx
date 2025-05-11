@@ -17,7 +17,7 @@ import {
   increment,
   arrayUnion
 } from 'firebase/firestore';
-import { auth, db } from './firebase/init';
+import { auth, db } from '../firebase/init';
 
 const AuthContext = createContext();
 const AUTH_TIMEOUT = 10000; // 10 seconds auth initialization timeout

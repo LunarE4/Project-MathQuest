@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import Phaser from 'phaser';
 import './GameWindow.css';
 import { doc, updateDoc, increment as firestoreIncrement, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase/init';
-import { ACHIEVEMENTS } from './achievements';
+import { db } from '../../firebase/init';
+import { ACHIEVEMENTS } from '../../achievements';
 
 export default function GameWindow() {
   const { state } = useLocation();

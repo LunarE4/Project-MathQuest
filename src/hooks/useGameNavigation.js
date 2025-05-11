@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from './firebase/init';
-import { auth } from './firebase/init';
+import { db } from '../firebase/init';
+import { auth } from '../firebase/init';
 
 export const useGameNavigation = () => {
   const navigate = useNavigate();
