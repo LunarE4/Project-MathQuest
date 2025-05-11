@@ -5,23 +5,40 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build",
-        "installCommand": "npm install",
-        "buildCommand": "npm run build"
+        "distDir": "build"
       }
     }
   ],
   "routes": [
-    // Cache static assets aggressively
     {
       "src": "/static/(.*)",
-      "headers": { "cache-control": "public, max-age=31536000, immutable" }
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
     },
-    // Serve all other routes via index.html (SPA fallback)
+    {
+      "src": "/Assets/(.*\\.(png|jpg|svg|woff2))",
+      "headers": {
+        "cache-control": "public, max-age=604800"
+      }
+    },
     {
       "src": "/(.*)",
       "dest": "/index.html",
-      "headers": { "cache-control": "no-cache" }  // Disable cache for HTML
+      "headers": {
+        "cache-control": "no-cache",
+        "content-security-policy": "default-src 'self'"
+      }
     }
-  ]
+  ],
+  "redirects": [
+    {
+      "source": "/blog",
+      "destination": "https://blog.yourdomain.com",
+      "permanent": true
+    }
+  ],
+  "headers": {
+    "X-XSS-Protection": "1; mode=block"
+  }
 }
