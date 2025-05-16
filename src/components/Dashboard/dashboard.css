@@ -5,7 +5,7 @@
   /* Cosmic Color Palette */
   --cosmic-dark: #0f0f1a;
   --cosmic-darker: #1a1a2e;
-  --cosmic-mid: #2a2a3a;
+  --cosmic-mid: #343446;
   --cosmic-light: #3a3a4a;
   --cosmic-lighter: #4a4a5a;
   
@@ -569,17 +569,17 @@
   font-weight: 600;
 }
 
-.difficulty-badge.beginner {
+.difficulty-badge.Beginner {
   background: rgba(56, 161, 105, 0.15);
   color: var(--cosmic-success);
 }
 
-.difficulty-badge.intermediate {
+.difficulty-badge.Intermediate {
   background: rgba(214, 158, 46, 0.15);
   color: var(--cosmic-warning);
 }
 
-.difficulty-badge.advanced {
+.difficulty-badge.Advanced {
   background: rgba(229, 62, 62, 0.15);
   color: var(--cosmic-danger);
 }
@@ -931,5 +931,79 @@
   }
   50% { 
     transform: translate(-50%, -60%) rotate(5deg) scale(1.05);
+  }
+}
+
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .dashboard.mobile-view {
+    padding: 10px;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+  }
+  
+  .user-stats {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 15px;
+  }
+  
+  .stat-card {
+    width: 30%;
+    padding: 8px;
+  }
+  
+  .tab-btn {
+    padding: 10px 5px;
+  }
+  
+  .tab-label {
+    display: none;
+  }
+  
+  .progress-grid.mobile {
+    grid-template-columns: 1fr;
+  }
+  
+  .topic-grid.mobile {
+    grid-template-columns: 1fr;
+  }
+  
+  .lessons-grid.mobile {
+    grid-template-columns: 1fr;
+  }
+  
+  .badges-grid.mobile {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .activity-item p {
+    flex-wrap: wrap;
+  }
+  
+  .activity-score {
+    margin-left: 5px;
+  }
+  
+  .activity-xp {
+    margin-left: 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .badges-grid.mobile {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-card {
+    font-size: 0.9rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.2rem;
   }
 }
