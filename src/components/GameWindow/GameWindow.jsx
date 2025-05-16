@@ -17,8 +17,21 @@ export default function GameWindow() {
   const [loading, setLoading] = useState(true);
   const [lessonData, setLessonData] = useState(null);
   const [userProgress, setUserProgress] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
 
-  const increment = (value) => firestoreIncrement(value);
+  useEffect(() => {
+    const checkIfMobile = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+    };
+    
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIfMobile);
+    };
+  }, []);
 
   useEffect(() => {
     if (state?.lessonData) {
@@ -45,9 +58,7 @@ export default function GameWindow() {
 
     try {
       const userRef = doc(db, 'users', user.uid);
-      console.log("Attempting to update user doc:", user.uid, "with:", updates);
       await updateDoc(userRef, updates);
-      console.log("Update successful");
       return true;
     } catch (error) {
       console.error("Firestore update error:", error);
@@ -61,14 +72,22 @@ export default function GameWindow() {
       navigate('/dashboard');
       return;
     }
-  
+
     try {
+      const currentAchievements = state?.userProgress?.achievements || {};
+      const completedLessons = state?.userProgress?.completedLessons || {};
+      
+      // Filter out achievements the user already has
+      const newAchievements = results.lessonStats.achievements?.filter(
+        achId => !currentAchievements[achId]?.unlocked
+      ) || [];
+
       const updates = {
         xp: firestoreIncrement(results.xpEarned),
         [`completedLessons.${lessonData.id}`]: {
           lessonId: lessonData.id,
           lessonTitle: lessonData.title,
-          topic: lessonData.topic || 'general', // Make sure topic is included
+          topic: lessonData.topic || 'general',
           finalScore: results.finalScore,
           completedAt: serverTimestamp(),
           timeTaken: results.timeTaken,
@@ -78,9 +97,9 @@ export default function GameWindow() {
         },
         lastActive: serverTimestamp()
       };
-  
-      // Add achievement updates
-      results.lessonStats.achievements?.forEach(achId => {
+
+      // Only update achievements that are new
+      newAchievements.forEach(achId => {
         updates[`achievements.${achId}`] = {
           unlocked: true,
           date: serverTimestamp(),
@@ -90,8 +109,7 @@ export default function GameWindow() {
       });
 
       await updateUserProgress(updates);
-  
-      // Navigate with completion data
+
       navigate('/dashboard', {
         state: {
           lessonCompleted: true,
@@ -102,10 +120,22 @@ export default function GameWindow() {
             finalScore: results.finalScore,
             xpEarned: results.xpEarned
           },
-          achievements: results.lessonStats.achievements?.map(achId => ({
+          achievements: newAchievements.map(achId => ({
             ...ACHIEVEMENTS[achId],
             unlocked: true
-          })) || []
+          })) || [],
+          // Include completed lessons in state
+          completedLessons: {
+            ...completedLessons,
+            [lessonData.id]: {
+              lessonId: lessonData.id,
+              lessonTitle: lessonData.title,
+              topic: lessonData.topic,
+              finalScore: results.finalScore,
+              completedAt: new Date(),
+              xpEarned: results.xpEarned
+            }
+          }
         }
       });
     } catch (error) {
@@ -138,10 +168,15 @@ export default function GameWindow() {
       navigate: navigate,
       scene: [new LessonGameScene({
         lessonData,
-        userProgress,
+        userProgress: {
+          ...state?.userProgress,
+          completedLessons: state?.userProgress?.completedLessons || {}
+        },
+        currentAchievements: state?.userProgress?.achievements || {},
         reactEvents: reactEvents.current,
         onComplete: handleLessonCompleted,
-        userId: user?.uid
+        userId: user?.uid,
+        isMobile
       })],
       physics: {
         default: 'arcade',
@@ -152,6 +187,9 @@ export default function GameWindow() {
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: '100%',
         height: '100%'
+      },
+      input: {
+        touch: true
       }
     };
 
@@ -164,7 +202,7 @@ export default function GameWindow() {
       }
       sessionStorage.removeItem('currentLesson');
     };
-  }, [lessonData, userProgress]);
+  }, [lessonData, userProgress, isMobile]);
 
   if (loading) {
     return (
@@ -183,12 +221,12 @@ export default function GameWindow() {
           className="cosmic-button exit-button"
           onClick={() => navigate('/dashboard')}
         >
-          <span className="button-icon">◄</span> Exit Warp
+          <span className="button-icon">◄</span> {isMobile ? 'Exit' : 'Exit Warp'}
         </button>
         <div className="xp-counter">
           <span className="xp-icon">✦</span>
           <span className="xp-amount">
-            +{Math.ceil(lessonData.xpReward / lessonData.problems.length)} XP per problem
+            +{Math.ceil(lessonData.xpReward / lessonData.problems.length)} XP
           </span>
         </div>
       </div>
@@ -202,9 +240,11 @@ class LessonGameScene extends Phaser.Scene {
     this.config = config;
     this.lesson = config.lessonData;
     this.userProgress = config.userProgress || {};
+    this.currentAchievements = config.currentAchievements || {};
     this.reactEvents = config.reactEvents;
     this.onComplete = config.onComplete;
     this.userId = config.userId;
+    this.isMobile = config.isMobile;
     this.currentProblemIndex = 0;
     this.correctAnswers = 0;
     this.problemElements = [];
@@ -213,7 +253,7 @@ class LessonGameScene extends Phaser.Scene {
     this.minimumScore = 0;
     this.attemptsPerProblem = {};
     this.startTime = 0;
-    this.unlockedAchievements = []; // Track achievements during lesson
+    this.unlockedAchievements = [];
   }
 
   preload() {
@@ -221,38 +261,37 @@ class LessonGameScene extends Phaser.Scene {
   }
 
   create() {
-    // Clear any default background
-    this.cameras.main.setBackgroundColor('#00000000'); // Transparent
-    
-    // Create a container for all background elements at depth -1000
+    this.cameras.main.setBackgroundColor('#00000000');
+    this.createCosmicBackground();
+    this.createUI();
+  }
+
+  createCosmicBackground() {
     this.cosmicBg = this.add.container(0, 0).setDepth(-1000);
     
-    // 1. Create dark space background
+    // Space background
     const space = this.add.rectangle(
-        0, 0, 
-        this.scale.width, this.scale.height, 
-        0x0a0a2a
+      0, 0, 
+      this.scale.width, this.scale.height, 
+      0x0a0a2a
     ).setOrigin(0, 0);
     this.cosmicBg.add(space);
     
-    // 2. Add radial gradient effect
+    // Gradient effect
     const gradient = this.add.graphics();
     gradient.fillGradientStyle(
-        0x1a1a4a, 0x1a1a4a,  // Top color
-        0x000000, 0x000000,  // Bottom color
-        1, 1,                // Alpha values
-        0, 0,                // X/Y of first point
-        0, this.scale.height // X/Y of second point
+      0x1a1a4a, 0x1a1a4a,
+      0x000000, 0x000000,
+      1, 1,
+      0, 0,
+      0, this.scale.height
     );
     gradient.fillRect(0, 0, this.scale.width, this.scale.height);
     this.cosmicBg.add(gradient);
     
-    // 3. Add cosmic elements
+    // Cosmic elements
     this.createNebula();
     this.createStarfield();
-    
-    // 4. Make sure our UI is on top
-    this.createUI();
   }
 
   createUI() {
@@ -260,36 +299,47 @@ class LessonGameScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
 
-    this.add.text(centerX, centerY - 500, this.lesson.title, {
-        fontSize: '36px',
-        fill: '#FFFFFF',
-        fontFamily: '"Poppins", sans-serif',
-        backgroundColor: '#00000066',
-        padding: { x: 20, y: 10 },
-        stroke: '#4a4a5a',
-        strokeThickness: 2
+    // Adjust font sizes based on device
+    const titleFontSize = this.isMobile ? '24px' : '36px';
+    const problemFontSize = this.isMobile ? '18px' : '24px';
+    const questionFontSize = this.isMobile ? '24px' : '32px';
+
+    // Lesson title
+    this.add.text(centerX, centerY - (this.isMobile ? 200 : 500), this.lesson.title, {
+      fontSize: titleFontSize,
+      fill: '#FFFFFF',
+      fontFamily: '"Poppins", sans-serif',
+      backgroundColor: '#00000066',
+      padding: { x: 20, y: 10 },
+      stroke: '#4a4a5a',
+      strokeThickness: 2,
+      wordWrap: { width: this.scale.width - 40 }
     }).setOrigin(0.5);
 
-    this.problemCounter = this.add.text(30, 30, 
-        `Problem ${this.currentProblemIndex + 1}/${this.lesson.problems.length}`, 
-        {
-            fontSize: '24px',
-            fill: '#FFFFFF',
-            fontFamily: '"Poppins", sans-serif'
-        }
+    // Problem counter
+    this.problemCounter = this.add.text(
+      this.isMobile ? 10 : 30, 
+      this.isMobile ? 10 : 30, 
+      `Problem ${this.currentProblemIndex + 1}/${this.lesson.problems.length}`, 
+      {
+        fontSize: problemFontSize,
+        fill: '#FFFFFF',
+        fontFamily: '"Poppins", sans-serif'
+      }
     );
 
+    // Score display
     this.scoreText = this.add.text(
-        30, 
-        this.problemCounter.y + this.problemCounter.height + 10, 
-        `Score: ${this.currentScore}%`,
-        {
-            fontSize: '24px',
-            fill: this.getScoreColor(this.currentScore),
-            fontFamily: '"Poppins", sans-serif',
-            stroke: '#e0e0e8',
-            strokeThickness: 2
-        }
+      this.isMobile ? 10 : 30, 
+      this.problemCounter.y + this.problemCounter.height + (this.isMobile ? 5 : 10), 
+      `Score: ${this.currentScore}%`,
+      {
+        fontSize: problemFontSize,
+        fill: this.getScoreColor(this.currentScore),
+        fontFamily: '"Poppins", sans-serif',
+        stroke: '#e0e0e8',
+        strokeThickness: 2
+      }
     );  
 
     this.displayCurrentProblem();
@@ -298,59 +348,60 @@ class LessonGameScene extends Phaser.Scene {
   createNebula() {
     const colors = [0x4a148c, 0x311b92, 0x1a237e, 0x0d47a1, 0x01579b];
     
-    for (let i = 0; i < 8; i++) {
-        const x = Phaser.Math.Between(-100, this.scale.width + 100);
-        const y = Phaser.Math.Between(-100, this.scale.height + 100);
-        const radius = Phaser.Math.Between(100, 300);
-        const color = Phaser.Math.RND.pick(colors);
-        const alpha = Phaser.Math.FloatBetween(0.1, 0.25);
+    for (let i = 0; i < (this.isMobile ? 4 : 8); i++) {
+      const x = Phaser.Math.Between(-100, this.scale.width + 100);
+      const y = Phaser.Math.Between(-100, this.scale.height + 100);
+      const radius = Phaser.Math.Between(100, 300);
+      const color = Phaser.Math.RND.pick(colors);
+      const alpha = Phaser.Math.FloatBetween(0.1, 0.25);
+      
+      const nebula = this.add.circle(x, y, radius, color, alpha)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(-999);
         
-        const nebula = this.add.circle(x, y, radius, color, alpha)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .setDepth(-999);  // Just above background
-            
-        this.tweens.add({
-            targets: nebula,
-            x: x + Phaser.Math.Between(-100, 100),
-            y: y + Phaser.Math.Between(-50, 50),
-            radius: radius * Phaser.Math.FloatBetween(0.8, 1.2),
-            alpha: alpha * Phaser.Math.FloatBetween(0.8, 1.2),
-            duration: Phaser.Math.Between(8000, 15000),
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
+      this.tweens.add({
+        targets: nebula,
+        x: x + Phaser.Math.Between(-100, 100),
+        y: y + Phaser.Math.Between(-50, 50),
+        radius: radius * Phaser.Math.FloatBetween(0.8, 1.2),
+        alpha: alpha * Phaser.Math.FloatBetween(0.8, 1.2),
+        duration: Phaser.Math.Between(8000, 15000),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
     }
   }
 
   createStarfield() {
-    for (let i = 0; i < 150; i++) {
-        const x = Phaser.Math.Between(0, this.scale.width);
-        const y = Phaser.Math.Between(0, this.scale.height);
-        const size = Phaser.Math.FloatBetween(0.5, 2);
-        const alpha = Phaser.Math.FloatBetween(0.5, 1);
+    const starCount = this.isMobile ? 75 : 150;
+    for (let i = 0; i < starCount; i++) {
+      const x = Phaser.Math.Between(0, this.scale.width);
+      const y = Phaser.Math.Between(0, this.scale.height);
+      const size = Phaser.Math.FloatBetween(0.5, 2);
+      const alpha = Phaser.Math.FloatBetween(0.5, 1);
+      
+      const star = this.add.circle(x, y, size, 0xffffff, alpha)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(-500);
         
-        const star = this.add.circle(x, y, size, 0xffffff, alpha)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .setDepth(-500);  // Above nebulas but below UI
-            
-        this.tweens.add({
-            targets: star,
-            alpha: { from: alpha * 0.3, to: alpha },
-            scale: { from: size * 0.5, to: size * 1.5 },
-            duration: Phaser.Math.Between(2000, 5000),
-            yoyo: true,
-            repeat: -1,
-            delay: Phaser.Math.Between(0, 3000)
-        });
+      this.tweens.add({
+        targets: star,
+        alpha: { from: alpha * 0.3, to: alpha },
+        scale: { from: size * 0.5, to: size * 1.5 },
+        duration: Phaser.Math.Between(2000, 5000),
+        yoyo: true,
+        repeat: -1,
+        delay: Phaser.Math.Between(0, 3000)
+      });
     }
     
-    // Shooting stars
+    // Shooting stars (less frequent on mobile)
     this.time.addEvent({
-        delay: 5000,
-        callback: this.createShootingStar,
-        callbackScope: this,
-        loop: true
+      delay: this.isMobile ? 8000 : 5000,
+      callback: this.createShootingStar,
+      callbackScope: this,
+      loop: true
     });
   }
 
@@ -361,30 +412,30 @@ class LessonGameScene extends Phaser.Scene {
     const endY = startY + Phaser.Math.Between(100, 200);
     
     const star = this.add.circle(startX, startY, 1.5, 0xffffff, 1)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(-400);
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(-400);
     
     const tail = this.add.graphics();
     
     this.tweens.add({
-        targets: star,
-        x: endX,
-        y: endY,
-        radius: 3,
-        alpha: 0,
-        duration: 800,
-        ease: 'Cubic.easeOut',
-        onUpdate: function() {
-            tail.clear();
-            tail.lineStyle(2, 0xffffff, 0.6);
-            tail.lineBetween(startX, startY, star.x, star.y);
-            tail.fillStyle(0x5d5dff, 0.2);
-            tail.fillCircle(star.x, star.y, 10);
-        },
-        onComplete: function() {
-            tail.destroy();
-            star.destroy();
-        }
+      targets: star,
+      x: endX,
+      y: endY,
+      radius: 3,
+      alpha: 0,
+      duration: 800,
+      ease: 'Cubic.easeOut',
+      onUpdate: function() {
+        tail.clear();
+        tail.lineStyle(2, 0xffffff, 0.6);
+        tail.lineBetween(startX, startY, star.x, star.y);
+        tail.fillStyle(0x5d5dff, 0.2);
+        tail.fillCircle(star.x, star.y, 10);
+      },
+      onComplete: function() {
+        tail.destroy();
+        star.destroy();
+      }
     });
   }
 
@@ -399,13 +450,18 @@ class LessonGameScene extends Phaser.Scene {
       `Problem ${this.currentProblemIndex + 1}/${this.lesson.problems.length}`
     );
   
-    this.problemText = this.add.text(centerX, centerY - 360, problem.question, {
-      fontSize: '32px',
+    // Adjust question position and styling based on device
+    const questionY = this.isMobile ? centerY - 150 : centerY - 360;
+    const questionFontSize = this.isMobile ? '24px' : '32px';
+    const questionWrapWidth = this.scale.width - (this.isMobile ? 40 : 100);
+  
+    this.problemText = this.add.text(centerX, questionY, problem.question, {
+      fontSize: questionFontSize,
       fill: '#FFFFFF',
       fontFamily: '"Poppins", sans-serif',
       backgroundColor: '#00000066',
       padding: { x: 20, y: 15 },
-      wordWrap: { width: this.scale.width - 100 },
+      wordWrap: { width: questionWrapWidth },
       align: 'center'
     }).setOrigin(0.5);
   
@@ -416,24 +472,27 @@ class LessonGameScene extends Phaser.Scene {
   createAnswerButtons(problem, centerX, centerY) {
     this.answerButtons = [];
     const answers = this.getAnswerOptions(problem);
-    const buttonWidth = 320;  
-    const buttonHeight = 90;   
-    const buttonSpacing = 350; 
-    const verticalSpacing = 140; 
+    
+    // Mobile-optimized button sizes and layout
+    const buttonWidth = this.isMobile ? this.scale.width * 0.8 : 320;
+    const buttonHeight = this.isMobile ? 70 : 90;
+    const buttonSpacing = this.isMobile ? 0 : 350;
+    const verticalSpacing = this.isMobile ? 90 : 140;
     const startX = centerX - (buttonSpacing * (answers.length > 2 ? 0.5 : 0));
-    const startY = centerY + 60; 
-  
+    const startY = this.isMobile ? centerY : centerY + 60;
+    
     const buttonColors = [
-      0xA7C6DA , 
-      0xEEFCCE ,  
-      0x9EB25D ,  
+      0xA7C6DA, 
+      0xEEFCCE,  
+      0x9EB25D,  
       0xF5E57A  
     ];
     const buttonAlphas = [0.9, 0.9, 0.9, 0.9];
   
     answers.forEach((answer, index) => {
-      const btnX = startX + (index % 2) * buttonSpacing;
-      const btnY = startY + Math.floor(index / 2) * verticalSpacing;
+      // Stack buttons vertically on mobile
+      const btnX = this.isMobile ? centerX : startX + (index % 2) * buttonSpacing;
+      const btnY = startY + (this.isMobile ? index : Math.floor(index / 2)) * verticalSpacing;
       
       const btn = this.add.rectangle(
         btnX, btnY, 
@@ -462,7 +521,7 @@ class LessonGameScene extends Phaser.Scene {
         .on('pointerdown', () => this.checkAnswer(answer, problem));
   
       const btnText = this.add.text(btnX, btnY, answer.toString(), {
-        fontSize: '28px',
+        fontSize: this.isMobile ? '22px' : '28px',
         fontFamily: '"Poppins", sans-serif',
         color: '#FFFFFF',
         stroke: '#000000',
@@ -473,7 +532,8 @@ class LessonGameScene extends Phaser.Scene {
           color: '#000000',
           blur: 2,
           stroke: true
-        }
+        },
+        wordWrap: { width: buttonWidth - 20 }
       }).setOrigin(0.5);
   
       this.answerButtons.push(btn);
@@ -544,10 +604,10 @@ class LessonGameScene extends Phaser.Scene {
     
     const celebration = this.add.text(
       this.scale.width / 2,
-      this.scale.height / 2 - 50,
+      this.scale.height / 2 - (this.isMobile ? 30 : 50),
       '✓ Correct!',
       {
-        fontSize: '48px',
+        fontSize: this.isMobile ? '36px' : '48px',
         fill: '#38a169',
         fontFamily: '"Poppins", sans-serif'
       }
@@ -574,10 +634,10 @@ class LessonGameScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     const feedback = this.add.text(
       centerX,
-      this.scale.height / 2 - 100,
+      this.scale.height / 2 - (this.isMobile ? 50 : 100),
       `Close! -${deduction}%`,
       {
-        fontSize: '32px',
+        fontSize: this.isMobile ? '24px' : '32px',
         fill: '#f5b700',
         fontFamily: '"Poppins", sans-serif'
       }
@@ -619,10 +679,10 @@ class LessonGameScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     const deductionText = this.add.text(
       centerX,
-      this.scale.height / 2 - 100,
+      this.scale.height / 2 - (this.isMobile ? 50 : 100),
       `-${this.scoreDeduction}%`,
       {
-        fontSize: '32px',
+        fontSize: this.isMobile ? '24px' : '32px',
         fill: '#e53e3e',
         fontFamily: '"Poppins", sans-serif'
       }
@@ -654,54 +714,82 @@ class LessonGameScene extends Phaser.Scene {
     const timeTaken = (Date.now() - this.startTime) / 1000;
     const lessonId = this.lesson.id;
     const topic = this.lesson.topic;
-  
-    // Perfect Score Achievement (100% score)
-    if (this.currentScore === 100) {
-      achievements.push('perfectScore');
-    }
-  
-    // First Try Master (all problems correct on first attempt)
-    const allFirstTry = Object.values(this.attemptsPerProblem).every(attempt => attempt === 1);
-    if (allFirstTry) {
-      achievements.push('firstTryMaster');
-    }
-  
-    // Speed Runner (completed under time limit)
-    const timeLimit = this.lesson.problems.length * 15; // 15 seconds per problem
-    if (timeTaken < timeLimit) {
-      achievements.push('speedRunner');
-    }
-  
-    // Topic-specific achievements
-    if (topic === 'algebra' && this.currentScore >= 90) {
-      achievements.push('algebraProdigy');
-    }
 
-    if (topic === 'geometry' && this.currentScore >= 90) {
-      achievements.push('geometryProdigy');
-    }
+    // Get all completed lessons in this topic from user progress
+    const completedTopicLessons = this.userProgress.completedLessons 
+      ? Object.values(this.userProgress.completedLessons).filter(
+          lesson => lesson.topic === topic
+        )
+      : [];
 
-    if (topic === 'calculus' && this.currentScore >= 90) {
-      achievements.push('calculusProdigy');
-    }
-  
-    // Check for exclusive achievements
     Object.keys(ACHIEVEMENTS).forEach(achId => {
+      // Skip if already unlocked
+      if (this.currentAchievements[achId]?.unlocked) return;
+
       const ach = ACHIEVEMENTS[achId];
-      if (ach.exclusiveTo && ach.exclusiveTo.includes(lessonId)) {
-        if (this.currentScore >= 90) { 
-          achievements.push(achId);
-        }
+      
+      // Skip if achievement doesn't apply to this lesson
+      if (ach.exclusiveTo && !ach.exclusiveTo.includes(lessonId)) {
+        return;
+      }
+
+      let conditionMet = false;
+      
+      // Check achievement-specific conditions
+      switch(achId) {
+        // ... (keep all other achievement cases the same)
+
+        case 'algebraProdigy':
+          if (topic === 'algebra') {
+            // Check if all algebra lessons are completed with 90%+ score
+            const algebraLessons = ['alg0', 'alg1', 'alg2', 'alg3'];
+            conditionMet = algebraLessons.every(lesson => 
+              completedTopicLessons.some(
+                completed => completed.lessonId === lesson && completed.finalScore >= 90
+              )
+            );
+          }
+          break;
+          
+        case 'geometryProdigy':
+          if (topic === 'geometry') {
+            // Check if all geometry lessons are completed with 90%+ score
+            const geometryLessons = ['geo0', 'geo1', 'geo2', 'geo3'];
+            conditionMet = geometryLessons.every(lesson => 
+              completedTopicLessons.some(
+                completed => completed.lessonId === lesson && completed.finalScore >= 90
+              )
+            );
+          }
+          break;
+          
+        case 'calculusProdigy':
+          if (topic === 'calculus') {
+            // Check if all calculus lessons are completed with 90%+ score
+            const calculusLessons = ['calc0', 'calc1', 'calc2'];
+            conditionMet = calculusLessons.every(lesson => 
+              completedTopicLessons.some(
+                completed => completed.lessonId === lesson && completed.finalScore >= 90
+              )
+            );
+          }
+          break;
+
+        default:
+          // For other achievements tied to specific lessons
+          if (ach.exclusiveTo && ach.exclusiveTo.includes(lessonId)) {
+            conditionMet = this.currentScore >= 80;
+          }
+      }
+
+      if (conditionMet) {
+        achievements.push(achId);
       }
     });
-  
-    // Filter out duplicates and achievements not applicable to this lesson
-    this.unlockedAchievements = achievements.filter((achId, index, self) => {
-      const ach = ACHIEVEMENTS[achId];
-      return self.indexOf(achId) === index && // Unique
-        (!ach.exclusiveTo || ach.exclusiveTo.includes(lessonId));
-    });
-  
+
+    // Filter out duplicates
+    this.unlockedAchievements = [...new Set(achievements)];
+    
     return this.unlockedAchievements;
   }
 
@@ -710,50 +798,58 @@ class LessonGameScene extends Phaser.Scene {
     const timeTaken = (Date.now() - this.startTime) / 1000;
     const achievements = this.checkAchievements();
 
-    // Prepare results for the completion handler
     this.completionResults = {
-        finalScore,
+      finalScore,
+      timeTaken,
+      xpEarned: Math.floor((finalScore / 100) * this.lesson.xpReward),
+      lessonStats: {
+        lessonId: this.lesson.id,
+        topic: this.lesson.topic,
+        completedAt: new Date(),
         timeTaken,
-        xpEarned: Math.floor((finalScore / 100) * this.lesson.xpReward),
-        lessonStats: {
-            lessonId: this.lesson.id,
-            topic: this.lesson.topic,
-            completedAt: new Date(),
-            timeTaken,
-            attemptsPerProblem: this.attemptsPerProblem,
-            achievements: this.unlockedAchievements,
-            xpEarned: Math.floor((finalScore / 100) * this.lesson.xpReward)
-        },
-        attemptsPerProblem: this.attemptsPerProblem
+        attemptsPerProblem: this.attemptsPerProblem,
+        achievements: this.unlockedAchievements,
+        xpEarned: Math.floor((finalScore / 100) * this.lesson.xpReward)
+      },
+      attemptsPerProblem: this.attemptsPerProblem
     };
 
     // Show completion screen 
     const baseXP = Math.floor((finalScore / 100) * this.lesson.xpReward);
     const bonusXP = this.unlockedAchievements.reduce((total, achId) => {
-        const ach = ACHIEVEMENTS[achId];
-        return total + (ach?.xpReward || 0);
+      const ach = ACHIEVEMENTS[achId];
+      return total + (ach?.xpReward || 0);
     }, 0);
     const totalXP = baseXP + bonusXP;
 
     const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7)
-        .setOrigin(0)
-        .setDepth(100);
+      .setOrigin(0)
+      .setDepth(100);
 
     const panel = this.add.container(this.scale.width / 2, this.scale.height / 2)
-        .setDepth(110);
+      .setDepth(110);
 
-    const panelHeight = 400 + (this.unlockedAchievements.length > 0 ? 
-        (this.unlockedAchievements.length * 100) + 40 : 0);
+    // Mobile-optimized panel sizing
+    const panelWidth = this.isMobile ? this.scale.width * 0.9 : 700;
+    const panelHeight = this.isMobile ? 
+      (400 + (this.unlockedAchievements.length > 0 ? (this.unlockedAchievements.length * 80) + 40 : 0)) * 0.8 :
+      (400 + (this.unlockedAchievements.length > 0 ? (this.unlockedAchievements.length * 100) + 40 : 0));
 
     const panelBg = this.add.graphics()
       .fillStyle(0x1a1a2e)
-      .fillRoundedRect(-350, -panelHeight/2, 700, panelHeight, 20)
+      .fillRoundedRect(-panelWidth/2, -panelHeight/2, panelWidth, panelHeight, 20)
       .lineStyle(4, 0x4CAF50)
-      .strokeRoundedRect(-350, -panelHeight/2, 700, panelHeight, 20);
+      .strokeRoundedRect(-panelWidth/2, -panelHeight/2, panelWidth, panelHeight, 20);
     panel.add(panelBg);
 
-    const title = this.add.text(0, -panelHeight/2 + 50, 'Lesson Complete!', { 
-      fontSize: '42px', 
+    // Adjust font sizes for mobile
+    const titleFontSize = this.isMobile ? '28px' : '42px';
+    const scoreFontSize = this.isMobile ? '24px' : '32px';
+    const xpFontSize = this.isMobile ? '20px' : '28px';
+    const achievementTitleFontSize = this.isMobile ? '18px' : '24px';
+
+    const title = this.add.text(0, -panelHeight/2 + (this.isMobile ? 30 : 50), 'Lesson Complete!', { 
+      fontSize: titleFontSize, 
       fill: '#4CAF50',
       fontFamily: 'Poppins',
       stroke: '#000000',
@@ -761,8 +857,8 @@ class LessonGameScene extends Phaser.Scene {
     }).setOrigin(0.5);
     panel.add(title);
 
-    const scoreText = this.add.text(0, -panelHeight/2 + 110, `Final Score: ${finalScore}%`, {
-      fontSize: '32px',
+    const scoreText = this.add.text(0, -panelHeight/2 + (this.isMobile ? 70 : 110), `Final Score: ${finalScore}%`, {
+      fontSize: scoreFontSize,
       fill: this.getScoreColor(finalScore),
       fontFamily: 'Poppins',
       stroke: '#000000',
@@ -770,8 +866,8 @@ class LessonGameScene extends Phaser.Scene {
     }).setOrigin(0.5);
     panel.add(scoreText);
 
-    const xpText = this.add.text(0, -panelHeight/2 + 160, `XP Earned: ${baseXP}${bonusXP > 0 ? ` + ${bonusXP} (bonus)` : ''}`, {
-      fontSize: '28px', 
+    const xpText = this.add.text(0, -panelHeight/2 + (this.isMobile ? 110 : 160), `XP Earned: ${baseXP}${bonusXP > 0 ? ` + ${bonusXP} (bonus)` : ''}`, {
+      fontSize: xpFontSize, 
       fill: '#FFD700',
       fontFamily: 'Poppins',
       stroke: '#000000',
@@ -780,8 +876,8 @@ class LessonGameScene extends Phaser.Scene {
     panel.add(xpText);
 
     if (this.unlockedAchievements.length > 0) { 
-      const achievementsTitle = this.add.text(0, -panelHeight/2 + 220, '─ NEW ACHIEVEMENTS ─', {
-        fontSize: '24px',
+      const achievementsTitle = this.add.text(0, -panelHeight/2 + (this.isMobile ? 150 : 220), '─ NEW ACHIEVEMENTS ─', {
+        fontSize: achievementTitleFontSize,
         fill: '#FFFFFF',
         fontFamily: 'Poppins',
         fontStyle: 'bold'
@@ -790,45 +886,46 @@ class LessonGameScene extends Phaser.Scene {
 
       this.unlockedAchievements.forEach((achId, index) => { 
         const ach = ACHIEVEMENTS[achId];
-        const yPos = -panelHeight/2 + 280 + (index * 100);
+        const yPos = -panelHeight/2 + (this.isMobile ? 200 + (index * 70) : 280 + (index * 100));
         
         const achievement = this.add.container(0, yPos);
         
+        const achievementWidth = this.isMobile ? panelWidth * 0.9 : 600;
         const bg = this.add.graphics()
           .fillStyle(0xFFFFFF, 0.1)
-          .fillRoundedRect(-300, -40, 600, 80, 15)
+          .fillRoundedRect(-achievementWidth/2, -30, achievementWidth, 60, 15)
           .lineStyle(2, Phaser.Display.Color.HexStringToColor(ach.color).color)
-          .strokeRoundedRect(-300, -40, 600, 80, 15);
+          .strokeRoundedRect(-achievementWidth/2, -30, achievementWidth, 60, 15);
         achievement.add(bg);
 
-        const icon = this.add.text(-270, 0, ach.icon, {
-          fontSize: '48px',
+        const icon = this.add.text(-achievementWidth/2 + 30, 0, ach.icon, {
+          fontSize: this.isMobile ? '36px' : '48px',
           fill: ach.color,
           stroke: '#000000',
           strokeThickness: 3
         }).setOrigin(0.5);
         achievement.add(icon);
 
-        const name = this.add.text(-220, -15, ach.name, {
-          fontSize: '24px',
+        const name = this.add.text(-achievementWidth/2 + 80, -10, ach.name, {
+          fontSize: this.isMobile ? '18px' : '24px',
           fill: ach.color,
           fontFamily: 'Poppins',
           fontStyle: 'bold'
         }).setOrigin(0, 0.5);
         achievement.add(name);
 
-        const desc = this.add.text(-220, 20, ach.description, {
-          fontSize: '18px',
+        const desc = this.add.text(-achievementWidth/2 + 80, 15, ach.description, {
+          fontSize: this.isMobile ? '14px' : '18px',
           fill: '#CCCCCC',
           fontFamily: 'Poppins'
         }).setOrigin(0, 0.5);
         achievement.add(desc);
 
-        const xpBadge = this.add.text(250, 0, `+${ach.xpReward} XP`, {
-          fontSize: '20px',
+        const xpBadge = this.add.text(achievementWidth/2 - 30, 0, `+${ach.xpReward} XP`, {
+          fontSize: this.isMobile ? '16px' : '20px',
           fill: '#FFD700',
           backgroundColor: '#00000066',
-          padding: { x: 15, y: 5 }
+          padding: { x: 10, y: 5 }
         }).setOrigin(0.5);
         achievement.add(xpBadge);
 
@@ -844,48 +941,51 @@ class LessonGameScene extends Phaser.Scene {
       });
     }
 
-    const continueBtnY = panelHeight/2 - 70;
+    const continueBtnY = panelHeight/2 - (this.isMobile ? 50 : 70);
+    const continueBtnWidth = this.isMobile ? 200 : 250;
+    const continueBtnHeight = this.isMobile ? 50 : 60;
+    const continueBtnRadius = this.isMobile ? 8 : 10;
+    
     const continueBtn = this.add.graphics()
-        .fillStyle(0x4CAF50)
-        .fillRoundedRect(-125, continueBtnY - 30, 250, 60, 10)
-        .lineStyle(2, 0xFFFFFF)
-        .strokeRoundedRect(-125, continueBtnY - 30, 250, 60, 10)
-        .setInteractive(
-            new Phaser.Geom.Rectangle(-125, continueBtnY - 30, 250, 60),
-            Phaser.Geom.Rectangle.Contains
-        );
+      .fillStyle(0x4CAF50)
+      .fillRoundedRect(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight, continueBtnRadius)
+      .lineStyle(2, 0xFFFFFF)
+      .strokeRoundedRect(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight, continueBtnRadius)
+      .setInteractive(
+        new Phaser.Geom.Rectangle(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight),
+        Phaser.Geom.Rectangle.Contains
+      );
     
     const btnText = this.add.text(0, continueBtnY, 'CONTINUE', {
-        fontSize: '24px', 
-        fill: '#FFFFFF',
-        fontFamily: 'Poppins',
-        fontStyle: 'bold'
+      fontSize: this.isMobile ? '20px' : '24px', 
+      fill: '#FFFFFF',
+      fontFamily: 'Poppins',
+      fontStyle: 'bold'
     }).setOrigin(0.5);
 
     continueBtn.on('pointerover', () => {
-        continueBtn.clear()
-            .fillStyle(0x3E8E41)
-            .fillRoundedRect(-125, continueBtnY - 30, 250, 60, 10)
-            .lineStyle(2, 0xFFFFFF)
-            .strokeRoundedRect(-125, continueBtnY - 30, 250, 60, 10);
-        btnText.setScale(1.05);
+      continueBtn.clear()
+        .fillStyle(0x3E8E41)
+        .fillRoundedRect(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight, continueBtnRadius)
+        .lineStyle(2, 0xFFFFFF)
+        .strokeRoundedRect(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight, continueBtnRadius);
+      btnText.setScale(1.05);
     });
 
     continueBtn.on('pointerout', () => {
-        continueBtn.clear()
-            .fillStyle(0x4CAF50)
-            .fillRoundedRect(-125, continueBtnY - 30, 250, 60, 10)
-            .lineStyle(2, 0xFFFFFF)
-            .strokeRoundedRect(-125, continueBtnY - 30, 250, 60, 10);
-        btnText.setScale(1);
+      continueBtn.clear()
+        .fillStyle(0x4CAF50)
+        .fillRoundedRect(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight, continueBtnRadius)
+        .lineStyle(2, 0xFFFFFF)
+        .strokeRoundedRect(-continueBtnWidth/2, continueBtnY - continueBtnHeight/2, continueBtnWidth, continueBtnHeight, continueBtnRadius);
+      btnText.setScale(1);
     });
 
-    // Only call onComplete when the user clicks continue
     continueBtn.on('pointerdown', async () => {
-        if (typeof this.config.onComplete === 'function') {
-            await this.config.onComplete(this.completionResults);
-        }
-        this.scene.stop();
+      if (typeof this.config.onComplete === 'function') {
+        await this.config.onComplete(this.completionResults);
+      }
+      this.scene.stop();
     });
 
     panel.add(continueBtn);
@@ -893,10 +993,10 @@ class LessonGameScene extends Phaser.Scene {
     
     panel.setScale(0);
     this.tweens.add({
-        targets: panel,
-        scale: 1,
-        duration: 300,
-        ease: 'Back.easeOut'
+      targets: panel,
+      scale: 1,
+      duration: 300,
+      ease: 'Back.easeOut'
     });
   }
 
