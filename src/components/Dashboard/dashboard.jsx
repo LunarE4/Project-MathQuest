@@ -17,6 +17,17 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Check for mobile view
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Load user data from Firestore
   useEffect(() => {
@@ -29,15 +40,12 @@ export default function Dashboard() {
           if (docSnap.exists()) {
             setUserData(docSnap.data());
             
-            // Check for completion data in route state
             if (location.state?.lessonCompleted) {
               setCompletionData({
                 ...location.state,
                 achievements: location.state.achievements
               });
               setShowCompletion(true);
-              
-              // Clear the state to prevent showing again on refresh
               navigate(location.pathname, { replace: true, state: {} });
             }
           }
@@ -60,28 +68,22 @@ export default function Dashboard() {
   const progressData = useMemo(() => {
     if (!userData) return null;
   
-    // Get XP from userData
     const currentXP = userData.xp || userData.totalXP || 0; 
-  
-    // Calculate level based on XP (300 XP per level)
     const level = Math.floor(currentXP / 300) + 1;
     const xpForNextLevel = level * 300;
     const xpInCurrentLevel = currentXP % 300;
     const levelProgress = (xpInCurrentLevel / 300) * 100;
   
-    // Format streak
     const formatStreak = () => {
       if (!userData.streak) return "1 Day";
       return `${userData.streak} day${userData.streak !== 1 ? 's' : ''}`;
     };
   
-    // Calculate skill percentages (assuming 0-5 scale)
     const calculateSkillPercentage = (skillValue) => {
-      const maxSkill = 5; // Assuming skills are rated 0-5
+      const maxSkill = 5;
       return Math.round(((skillValue || 0) / maxSkill) * 100);
     };
   
-    // Calculate overall progress (average of all skills)
     const calculateOverallProgress = () => {
       if (!userData.completedLessons) return 0;
       
@@ -91,39 +93,17 @@ export default function Dashboard() {
         calculus: 3
       };
       
-      // Count completed lessons
       const completedCount = Object.keys(userData.completedLessons).length;
-      
-      // Calculate total available lessons
       const totalAvailable = Object.values(totalLessons).reduce((sum, val) => sum + val, 0);
       
       return Math.round((completedCount / totalAvailable) * 100);
     };
   
-    // Calculate progress by topic
     const calculateTopicProgress = () => {
       const defaultTopics = {
-        algebra: { 
-          completed: 0, 
-          total: 4,  // Total algebra lessons
-          xp: 0, 
-          avgScore: 0,
-          lessonsCompleted: []
-        },
-        geometry: { 
-          completed: 0, 
-          total: 3,  // Total geometry lessons
-          xp: 0, 
-          avgScore: 0,
-          lessonsCompleted: []
-        },
-        calculus: { 
-          completed: 0, 
-          total: 3,  // Total calculus lessons
-          xp: 0, 
-          avgScore: 0,
-          lessonsCompleted: []
-        }
+        algebra: { completed: 0, total: 4, xp: 0, avgScore: 0, lessonsCompleted: [] },
+        geometry: { completed: 0, total: 4, xp: 0, avgScore: 0, lessonsCompleted: [] },
+        calculus: { completed: 0, total: 3, xp: 0, avgScore: 0, lessonsCompleted: [] }
       };
     
       if (!userData.completedLessons) return defaultTopics;
@@ -131,20 +111,18 @@ export default function Dashboard() {
       const topics = { ...defaultTopics };
     
       Object.entries(userData.completedLessons).forEach(([lessonId, lessonData]) => {
-        const topic = lessonData.topic || 'algebra'; // Default to algebra if not specified
+        const topic = lessonData.topic || 'algebra';
         if (topics[topic]) {
           topics[topic].completed++;
-          // Sum the XP earned from each lesson in this topic
           topics[topic].xp += lessonData.xpEarned || 0;
           topics[topic].lessonsCompleted.push({
             score: lessonData.finalScore || 0,
             id: lessonId,
-            xp: lessonData.xpEarned || 0  // Store individual lesson XP
+            xp: lessonData.xpEarned || 0
           });
         }
       });
     
-      // Calculate averages
       Object.keys(topics).forEach(topic => {
         const topicData = topics[topic];
         
@@ -181,7 +159,6 @@ export default function Dashboard() {
     };
   }, [userData]);
 
-  // Format completed lessons for display
   const completedLessons = useMemo(() => {
     if (!userData?.completedLessons) return [];
     
@@ -194,7 +171,6 @@ export default function Dashboard() {
     })).sort((a, b) => b.date - a.date);
   }, [userData]);
 
-  // Format achievements for display
   const achievements = useMemo(() => {
     if (!userData?.achievements) return [];
     
@@ -210,27 +186,23 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="dashboard cosmic-theme">
+    <div className={`dashboard cosmic-theme ${isMobile ? 'mobile-view' : ''}`}>
       <header className="dashboard-header">
         <div className="welcome-banner">
           <h1>Welcome back, <span className="username">{user?.displayName?.split(' ')[0]}!</span></h1>
           <p className="subtitle">Ready for today's cosmic math journey?</p>
           <div className="cosmic-decoration">
             <span className="moon">🌖</span>
-            {/* Bright stars */}
             <div className="star star-1" style={{ top: '25%', left: '20%' }}></div>
             <div className="star star-2" style={{ top: '35%', left: '80%' }}></div>
-            
-            {/* Medium stars */}
             <div className="star star-3" style={{ top: '40%', left: '30%' }}></div>
             <div className="star star-3" style={{ top: '70%', left: '20%' }}></div>
             <div className="star star-3" style={{ top: '40%', left: '75%' }}></div>
-            
-            {/* Distant stars */}
             <div className="star distant" style={{ top: '10%', left: '50%' }}></div>
             <div className="star distant" style={{ top: '85%', left: '60%' }}></div>
           </div>
         </div>
+        
         <div className="user-stats">
           <StatCard icon="🌕" label="Level" value={progressData?.level || 1} color="#8e8e93" />
           <StatCard icon="⭐" label="XP" value={progressData?.xp?.toLocaleString() || '0'} color="#aeaeb2" />
@@ -244,43 +216,42 @@ export default function Dashboard() {
           onClick={() => handleTabChange('progress')}
         >
           <span className="tab-icon">🛰️</span>
-          <span className="tab-label">Progress</span>
+          {!isMobile && <span className="tab-label">Progress</span>}
         </button>
         <button
           className={`tab-btn ${activeTab === 'lessons' ? 'active' : ''}`}
           onClick={() => handleTabChange('lessons')}
         >
           <span className="tab-icon">📡</span>
-          <span className="tab-label">Lessons</span>
+          {!isMobile && <span className="tab-label">Lessons</span>}
         </button>
         <button
           className={`tab-btn ${activeTab === 'achievements' ? 'active' : ''}`}
           onClick={() => handleTabChange('achievements')}
         >
           <span className="tab-icon">🏆</span>
-          <span className="tab-label">Achievements</span>
+          {!isMobile && <span className="tab-label">Achievements</span>}
         </button>
         <button
           className={`tab-btn ${activeTab === 'activity' ? 'active' : ''}`}
           onClick={() => handleTabChange('activity')}
         >
           <span className="tab-icon">🛸</span>
-          <span className="tab-label">Activity</span>
+          {!isMobile && <span className="tab-label">Activity</span>}
         </button>
       </nav>
 
       <div className="tab-content">
-        {activeTab === 'progress' && <ProgressTab progressData={progressData} />}
-        {activeTab === 'lessons' && <LessonsTab completedLessons={progressData.completedLessons} />}
-        {activeTab === 'achievements' && <AchievementsTab achievements={achievements} />}
-        {activeTab === 'activity' && <ActivityTab completedLessons={completedLessons} />}
+        {activeTab === 'progress' && <ProgressTab progressData={progressData} isMobile={isMobile} />}
+        {activeTab === 'lessons' && <LessonsTab completedLessons={progressData.completedLessons} isMobile={isMobile} />}
+        {activeTab === 'achievements' && <AchievementsTab achievements={achievements} isMobile={isMobile} />}
+        {activeTab === 'activity' && <ActivityTab completedLessons={completedLessons} isMobile={isMobile} />}
       </div>
     </div>
   );
 }
 
-// TotalProgress Function Component
-function TopicProgress({ topicData = {} }) {
+function TopicProgress({ topicData = {}, isMobile = false }) {
   const topics = [
     { id: 'algebra', name: 'Algebra', icon: 'Σ', color: '#FF7043' },
     { id: 'geometry', name: 'Geometry', icon: '⎔', color: '#66BB6A' },
@@ -290,7 +261,7 @@ function TopicProgress({ topicData = {} }) {
   return (
     <div className="topic-progress">
       <h3>Progress By Topic</h3>
-      <div className="topic-grid">
+      <div className={`topic-grid ${isMobile ? 'mobile' : ''}`}>
         {topics.map(topic => {
           const data = topicData[topic.id] || {
             completed: 0,
@@ -325,15 +296,19 @@ function TopicProgress({ topicData = {} }) {
                   ></div>
                 </div>
                 
-                <div className="stat">
-                  <span>Last Score:</span>
-                  <span>{data.avgScore}%</span>
-                </div>
-                
-                <div className="stat">
-                  <span>Gained XP:</span>
-                  <span>{data.xp.toLocaleString()}</span>
-                </div>
+                {!isMobile && (
+                  <>
+                    <div className="stat">
+                      <span>Avg Score:</span>
+                      <span>{data.avgScore}%</span>
+                    </div>
+                    
+                    <div className="stat">
+                      <span>Gained XP:</span>
+                      <span>{data.xp.toLocaleString()}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -343,12 +318,10 @@ function TopicProgress({ topicData = {} }) {
   );
 }
 
-// ProgressTab component
-function ProgressTab({ progressData }) {
+function ProgressTab({ progressData, isMobile }) {
   const location = useLocation();
   const [localXP, setLocalXP] = useState(progressData?.xp || 0);
 
-  // Handle immediate XP updates from navigation state
   useEffect(() => {
     if (location.state?.gainedXP) {
       setLocalXP(prev => prev + location.state.gainedXP);
@@ -362,34 +335,34 @@ function ProgressTab({ progressData }) {
         subtitle={`Level ${progressData?.level || 1} Explorer`} 
       />
       
-      <div className="progress-grid">
+      <div className={`progress-grid ${isMobile ? 'mobile' : ''}`}>
         <div className="mastery-card">
           <h3>Celestial Mastery</h3>
           <div className="circular-progress-container">
             <div className="circular-progress">
               <svg className="progress-ring" viewBox="0 0 100 100">
-                  <circle
-                    className="progress-ring-bg"
-                    cx="50"
-                    cy="50"
-                    r="45"
-                    fill="transparent"
-                    stroke="#3a3a3c"
-                    strokeWidth="8"
-                  />
-                  <circle
-                    className="progress-ring-fill"
-                    cx="50"
-                    cy="50"
-                    r="45"
-                    fill="transparent"
-                    stroke="#8e8e93"
-                    strokeWidth="8"
-                    strokeDasharray="283"
-                    strokeDashoffset={283 - (283 * progressData.overallProgress) / 100}
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <circle
+                  className="progress-ring-bg"
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="transparent"
+                  stroke="#3a3a3c"
+                  strokeWidth="8"
+                />
+                <circle
+                  className="progress-ring-fill"
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="transparent"
+                  stroke="#8e8e93"
+                  strokeWidth="8"
+                  strokeDasharray="283"
+                  strokeDashoffset={283 - (283 * progressData.overallProgress) / 100}
+                  strokeLinecap="round"
+                />
+              </svg>
               <div className="progress-percent">
                 {progressData?.overallProgress || 0}%
               </div>
@@ -414,24 +387,21 @@ function ProgressTab({ progressData }) {
         </div>
 
         <div className="topic-container">
-          <TopicProgress topicData={progressData?.byTopic} />
+          <TopicProgress topicData={progressData?.byTopic} isMobile={isMobile} />
         </div>
-
       </div>
     </div>
   );
 }
 
-function LessonsTab() {
+function LessonsTab({ isMobile }) {
   const [activeCategory, setActiveCategory] = useState('algebra');
   const navigate = useNavigate();
   const { userData } = useAuth();
   
-  // Updated lesson completion check
   const isLessonCompleted = (lessonId) => {
     if (!userData?.completedLessons) return false;
     
-    // Handle both object and array formats
     if (Array.isArray(userData.completedLessons)) {
       return userData.completedLessons.includes(lessonId);
     } else if (typeof userData.completedLessons === 'object') {
@@ -443,7 +413,7 @@ function LessonsTab() {
 
   const hasCompletedPrerequisites = (lesson) => {
     if (!lesson.prerequisites || lesson.prerequisites.length === 0) {
-      return true; // No prerequisites
+      return true;
     }
     
     return lesson.prerequisites.every(prereqId => 
@@ -462,21 +432,21 @@ function LessonsTab() {
           description: "Basic calculations for space navigation",
           icon: "✨",
           topic: "algebra",
-          difficulty: "beginner",
+          difficulty: "Beginner",
           problems: [
-            { question: "If a spaceship has 5 fuel cells and gains 3 more, then doubles its total, how many cells does it have?", 
-              answer: 16 },
-            { question: "A solar panel produces 15 energy units per hour. If it runs for 3 hours and then gains a 4-unit bonus, what’s its total output?", 
-              answer: 49 },
-            { question: "An asteroid splits into 3² × 4 fragments. How many pieces are there?", 
-              answer: 36 },
-            { question: "A warp core’s power is calculated as 2³ + 5 × 2. What’s its output?", 
-              answer: 18 },
-            { question: "A cargo hold has 50 units. If 6 crates, each weighing 4 units, are removed, what’s the remaining capacity?", 
-              answer: 26 },
+            { question: "A spaceship collects 12 moon rocks on Monday and 15 on Tuesday. How many did it collect total?", 
+              answer: 27 },
+            { question: "A rover has 30 energy cells. It uses 18 for a mission. How many are left?", 
+              answer: 12 },
+            { question: "An astronaut packs 4 meals per day for a 5-day trip. How many meals total?", 
+              answer: 20 },
+            { question: "A satellite orbits Earth 6 times in 24 hours. How many orbits per hour?", 
+              answer: 0.25 },
+            { question: "A rocket travels 7 km/hour for 4 hours. How far does it go?", 
+              answer: 28,
+              unit: "km"}
           ],
           xpReward: 30,
-          background: "algebra-easy-bg.png",
           prerequisites: [],
           completed: isLessonCompleted("alg0")
         },
@@ -486,69 +456,64 @@ function LessonsTab() {
           description: "Solve equations in zero gravity",
           icon: "🧮",
           topic: "algebra",
-          difficulty: "beginner",
+          difficulty: "Beginner",
           problems: [
-            { question: "A rocket’s fuel consumption follows 2x + 5 = 15. How many hours (x) until refueling?", 
-              answer: 5 },
-            { question: "An orbit adjustment requires solving 3(x - 4) = 21. Find x.", 
-              answer: 11 },
-            { question: "Oxygen mix ratio: x/3 + 2 = 8. What’s x?", 
-              answer: 18 },
-            { question: "Trajectory correction: 5x - 7 = 3x + 11. Solve for x.", 
-              answer: 9 },
-            { question: "Shield stability: 2(3x + 1) = 20. Find x.", 
-              answer: 3 },
+            { question: "A fuel tank has x + 5 = 12 liters. Find x.", 
+              answer: 7 },
+            { question: "If 3 × asteroid weight = 21 kg, what's the weight?", 
+              answer: 7, unit: "kg" },
+            { question: "A spaceship travels 2x = 16 km. Solve for x.", 
+              answer: 8, unit: "km" },
+            { question: "Oxygen tanks: 4x = 20. How many tanks (x)?", 
+              answer: 5  },
+            { question: "If x - 3 = 9, what’s x?", 
+              answer: 12 },
           ],
           xpReward: 50,
-          background: "algebra-bg.png",
           prerequisites: ["alg0"],
           completed: isLessonCompleted("alg1")
         },
         {
           id: "alg2",
-          title: "Systems in Space",
-          description: "Solve systems of equations for orbital mechanics",
-          icon: "🛰️",
-          topic: "algebra",
-          difficulty: "intermediate",
+          title: "Cosmic Decimals",
+          description: "Navigate asteroid fields with decimal math",
+          icon: "☄️",
+          difficulty: "Intermediate",
           problems: [
-            { question: "Docking paths intersect at y = 2x + 1 and y = -x + 7. Find (x, y).", 
-              answer: {x: 2, y: 5} },
-            { question: "Fuel mix requires solving 3x + 2y = 16 and x - y = 3. Find x and y.", 
-              answer: {x: 22/5, y: 7/5} },
-            { question: "A solar array’s output is y = x² and y = 2x + 8. Find intersections.", 
-              answer: [
-                { x: 4, y: 16 },
-                { x: -2, y: 4 }
-              ]},
-            { question: "Warp core alignment: x² + y = 10 and x + y = 4.", 
-              answer: [
-                { x: 3, y: 1 },
-                { x: -2, y: 6 }
-              ]},
+            { question: "A star's temperature rose from 12.5°C to 18.3°C. How much did it increase?", 
+              answer: 5.8, unit: "°C" },
+            { question: "Multiply fuel efficiency: 2.5 × 4", 
+              answer: 10 },
+            { question: "Divide 8.4 light-years by 2", 
+              answer: 4.2, unit: "light-years" },
+            { question: "Add spaceship weights: 12.7 + 5.3 tons", 
+              answer: 18, unit: "tons" },
+            { question: "Subtract: 15.0 - 3.75", 
+              answer: 11.25 }
           ],
-          xpReward: 65,
-          background: "algebra-system-bg.png",
+          xpReward: 70,
           prerequisites: ["alg1"],
           completed: isLessonCompleted("alg2")
         },
         {
           id: "alg3",
-          title: "Quadratic Equations",
-          description: "Navigate asteroid fields with math",
-          icon: "☄️",
-          topic: "algebra",
-          difficulty: "intermediate",
+          title: "Orbital Percentages",
+          description: "Calculate space mission success rates",
+          icon: "🛰️",
+          difficulty: "Intermediate",
           problems: [
-            { question: "Event horizon equation: x² - 9 = 0. Solve for x.", 
-              answer: [3, -3] },
-            { question: "Factor x² + 5x + 6 = 0 to stabilize the warp field.", 
-              answer: [-2, -3] },
-            { question: "Solve 2x² - 4x - 6 = 0 using the quadratic formula.", 
-              answer: [3, -1] },
+            { question: "If 40% of 50 satellites are active, how many is that?", 
+              answer: 20 },
+            { question: "A rocket has 30% fuel left. If the tank holds 200L, how much remains?", 
+              answer: 60, unit: "L" },
+            { question: "Increase 80 by 25% for maximum thrust", 
+              answer: 100 },
+            { question: "Find 15% of 120 space rations", 
+              answer: 18 },
+            { question: "A planet is 70% water. If its area is 500 km², what's the water area?", 
+              answer: 350, unit: "km²" }
           ],
-          xpReward: 75,
-          background: "algebra-medium-bg.png",
+          xpReward: 90,
           prerequisites: ["alg2"],
           completed: isLessonCompleted("alg3")
         }
@@ -564,57 +529,87 @@ function LessonsTab() {
           description: "Fundamental geometric concepts in zero-G",
           icon: "🌠",
           topic: "geometry",
-          difficulty: "beginner",
+          difficulty: "Beginner",
           problems: [
-            { question: "A hexagonal space station has how many sides?", 
-              answer: 6 },
-            { question: "Degrees in a full rotation (navigation compass)?", 
-              answer: 360 },
-            { question: "Lines of symmetry in an equilateral triangle?", 
-              answer: 3 },
+            { question: "How many sides does a pentagon-shaped space station have?", 
+              answer: 5 },
+            { question: "A rectangle has lengths of 4 cm and 7 cm. What's its perimeter?", 
+              answer: 22, units: "cm" },
+            { question: "How many degrees in three right angles?", 
+              answer: 270 },
+            { question: "A cube has how many edges?", 
+              answer: 12 },
+            { question: "Lines of symmetry in a square?", 
+              answer: 4 },
           ],
           xpReward: 30,
-          background: "geometry-easy-bg.png",
           prerequisites: [],
           completed: isLessonCompleted("geo0")
         },
         {
           id: "geo1",
-          title: "Cosmic Shapes",
-          description: "Calculate properties of celestial bodies",
-          icon: "🌌",
-          topic: "geometry",
-          difficulty: "intermediate",
+          title: "3D Space Shapes",
+          description: "Explore spacecraft geometry",
+          icon: "🛸",
+          difficulty: "Beginner",
           problems: [
-            { question: "A rectangular spaceship panel is 5cm × 8cm. What’s its area?", 
-              answer: 40, unit: "cm²" },
-            { question: "Circumference of a planet (radius 7,000km, π≈3.14)?", 
-              answer: 43.960, unit: "km" },
-            { question: "A trapezoidal warp core has bases 6m/10m and height 4m. Find area.", 
-              answer: 32, unit: "m²" },
+            { question: "How many faces does a cube-shaped spaceship have?", 
+              answer: 6 },
+            { question: "Edges on a triangular prism?", 
+              answer: 9 },
+            { question: "If a sphere's radius is 4m, what's its diameter?", 
+              answer: 8, unit: "m" },
+            { question: "Vertices in a rectangular prism?", 
+              answer: 8 }
           ],
           xpReward: 50,
-          background: "geometry-bg.png",
           prerequisites: ["geo0"],
           completed: isLessonCompleted("geo1")
         },
         {
           id: "geo2",
-          title: "Volumes in Space",
-          description: "Calculate capacities of spacecraft components",
-          icon: "🚀",
+          title: "Cosmic Shapes",
+          description: "Calculate properties of celestial bodies",
+          icon: "🌌",
           topic: "geometry",
-          difficulty: "intermediate",
+          difficulty: "Intermediate",
           problems: [
-            { question: "A spherical oxygen tank (r=5m) has what volume? (V=4/3πr³)", 
-              answer: ~523.6, unit: "m³" },
-            { question: "A cone-shaped escape pod (r=3m, h=4m) has what volume?", 
-              answer: ~37.7, unit: "m³" },
+            { question: "A square solar panel has sides of 5 m. What's its area?", 
+              answer: 25, unit: "m²" },
+            { question: "A circular space window has radius 3 m. What's its diameter?", 
+              answer: 6, unit: "m" },
+            { question: "A rectangular cargo bay is 8 m × 4 m. What's its area?", 
+              answer: 32, unit: "m²" },
+            { question: "A triangle has base 10 m and height 5 m. What's its area?", 
+              answer: 25, unit: "m²" },
+            { question: "Perimeter of an equilateral triangle with 6 cm sides?", 
+              answer: 18, unit: "cm" },
           ],
-          xpReward: 65,
-          background: "geometry-volume-bg.png",
+          xpReward: 70,
           prerequisites: ["geo1"],
           completed: isLessonCompleted("geo2")
+        },
+        {
+          id: "geo3",
+          title: "Alien Angles",
+          description: "Measure angles of UFO trajectories",
+          icon: "👽",
+          difficulty: "Intermediate",
+          problems: [
+            { question: "A spaceship turns 45° left, then 90° right. What's its total rotation?", 
+              answer: 45, unit: "°" },
+            { question: "How many degrees in a straight line?", 
+              answer: 180 },
+            { question: "If two angles form a right angle (90°), and one is 35°, what's the other?", 
+              answer: 55, unit: "°" },
+            { question: "An equilateral triangle's angles each measure...?", 
+              answer: 60, unit: "°" },
+            { question: "A reflex angle is greater than ___ degrees?", 
+              answer: 180 }
+          ],
+          xpReward: 90,
+          prerequisites: ["geo2"],
+          completed: isLessonCompleted("geo3")
         }
       ]
     },
@@ -628,12 +623,18 @@ function LessonsTab() {
           description: "Basic derivatives for space travel",
           icon: "⏱️",
           topic: "calculus",
-          difficulty: "beginner",
+          difficulty: "Beginner",
           problems: [
-            { question: "Differentiate y = 3x (linear motion).", 
-              answer: 3 },
-            { question: "Find dy/dx for y = x² (accelerating probe).", 
-              answer: '2x' },
+            { question: "A rocket travels 300 km in 5 hours. What's its speed per hour?", 
+              answer: 60, unit: "km/h" },
+            { question: "A satellite orbits Earth 4 times in 8 hours. How many orbits per hour?", 
+              answer: 0.5 },
+            { question: "A probe downloads 120 MB of data in 3 minutes. What's the download rate per minute?", 
+              answer: 40, unit: "MB/min" },
+            { question: "A rover charges its battery at 10% per hour. How long to charge from 0% to 50%?", 
+              answer: 5, unit: "hours" },
+            { question: "A spaceship uses 2 fuel cells per hour. How many cells for 6 hours?", 
+              answer: 12 },
           ],
           xpReward: 30,
           background: "calculus-easy-bg.png",
@@ -641,38 +642,40 @@ function LessonsTab() {
           completed: isLessonCompleted("calc0")
         },
         {
-          id: "calc1",
-          title: "Stellar Derivatives",
-          description: "Calculate rates of change in space",
-          icon: "🪐",
-          topic: "calculus",
-          difficulty: "intermediate",
+          id: "cal1",
+          title: "Space Patterns",
+          description: "Predict cosmic events with sequences",
+          icon: "🌌",
+          difficulty: "Beginner",
           problems: [
-            { question: "Derivative of f(x) = √x (gravity well)?", 
-              answer: "1/(2√x)" },
-            { question: "Differentiate y = 1/x² (inverse-square law).", 
-              answer: "-2/x³" },
+            { question: "Next in sequence: 5, 10, 15, ___", 
+              answer: 20 },
+            { question: "If Day 1=2 meteors, Day 2=4, Day 3=6, how many on Day 5?", 
+              answer: 10 },
+            { question: "Missing number: 7, 14, ___, 28", 
+              answer: 21 }
           ],
-          xpReward: 50,
-          background: "calculus-bg.png",
+          xpReward: 60,
           prerequisites: ["calc0"],
           completed: isLessonCompleted("calc1")
         },
         {
           id: "calc2",
-          title: "Gradient Fields",
-          description: "Partial derivatives for multidimensional space",
-          icon: "🧭",
-          topic: "calculus",
-          difficulty: "intermediate",
+          title: "Black Hole Logic",
+          description: "Solve mysteries with algebraic reasoning",
+          icon: "🕳️",
+          difficulty: "Intermediate",
           problems: [
-            { question: "Find ∂f/∂x for f(x,y) = 3x²y (vector field).", 
-              answer: "6xy" },
-            { question: "∇f for f(x,y) = 5x + 2y (simple plane)?", 
-              answer: ["5", "2"] },
+            { question: "If all robots (R) need 2 batteries, and you have 10 batteries, how many robots can run?", 
+              answer: 5 },
+            { question: "A spaceship's speed (S) is distance (D) divided by time (T). Write the formula.", 
+              answer: "S=D/T" },
+            { question: "If 3x + 2 = 11, find x", 
+              answer: 3 },
+            { question: "True or false: 5 × (3 + 1) = 5 × 3 + 5 × 1", 
+              answer: true }
           ],
-          xpReward: 65,
-          background: "calculus-gradient-bg.png",
+          xpReward: 80,
           prerequisites: ["calc1"],
           completed: isLessonCompleted("calc2")
         }
@@ -680,7 +683,6 @@ function LessonsTab() {
     }
   };
 
-  // Update the lesson objects to use the helper function
   const updatedLessonCategories = useMemo(() => {
     return Object.fromEntries(
       Object.entries(lessonCategories).map(([category, data]) => [
@@ -698,7 +700,7 @@ function LessonsTab() {
 
   const handleLessonClick = (lesson) => {
     if (!hasCompletedPrerequisites(lesson) && !lesson.completed) {
-      return; // Don't navigate if prerequisites aren't met
+      return;
     }
     
     navigate('/game', {
@@ -727,12 +729,12 @@ function LessonsTab() {
             onClick={() => setActiveCategory(key)}
           >
             <span className="category-icon">{category.icon}</span>
-            <span>{category.name}</span>
+            {!isMobile && <span>{category.name}</span>}
           </button>
         ))}
       </div>
       
-      <div className="lessons-grid">
+      <div className={`lessons-grid ${isMobile ? 'mobile' : ''}`}>
         {updatedLessonCategories[activeCategory].lessons.map(lesson => {
           const prerequisitesMet = hasCompletedPrerequisites(lesson);
           const canAccess = prerequisitesMet || lesson.completed;
@@ -755,7 +757,7 @@ function LessonsTab() {
                     {lesson.difficulty}
                   </span>
                   {lesson.completed && (
-                    <span className="completion-badge">✓ Completed</span>
+                    <span className="completion-badge">✓</span>
                   )}
                   <span className="xp-reward">{lesson.xpReward} XP</span>
                 </div>
@@ -778,8 +780,7 @@ function LessonsTab() {
   );
 }
 
-// AchievementsTab component
-function AchievementsTab({ achievements }) {
+function AchievementsTab({ achievements, isMobile }) {
   const unlockedCount = achievements.filter(a => a.unlocked).length;
   const totalCount = achievements.length;
 
@@ -790,7 +791,7 @@ function AchievementsTab({ achievements }) {
         subtitle={`${unlockedCount} of ${totalCount} unlocked`} 
       />
       
-      <div className="badges-grid">
+      <div className={`badges-grid ${isMobile ? 'mobile' : ''}`}>
         {achievements.map(ach => (
           <div key={ach.id} className={`badge-card ${ach.unlocked ? 'earned' : 'locked'}`}>
             <div className="badge-icon" style={{ color: ach.color }}>
@@ -801,7 +802,7 @@ function AchievementsTab({ achievements }) {
             {ach.unlocked ? (
               <>
                 <small className="earned-date">
-                  Achieved {ach.date?.toLocaleDateString() || 'recently'}
+                  {isMobile ? '' : 'Achieved '}{ach.date?.toLocaleDateString() || 'recently'}
                 </small>
                 <div className="xp-badge">+{ach.xpReward} XP</div>
               </>
@@ -815,8 +816,7 @@ function AchievementsTab({ achievements }) {
   );
 }
 
-// ActivityTab component
-function ActivityTab({ completedLessons }) {
+function ActivityTab({ completedLessons, isMobile }) {
   return (
     <div className="activity-tab">
       <SectionHeader 
@@ -825,27 +825,32 @@ function ActivityTab({ completedLessons }) {
       />
       
       <div className="activity-list">
-        {completedLessons.map(lesson => (
-          <div key={lesson.id} className="activity-item">
-            <div className="activity-icon">📚</div>
-            <div className="activity-details">
-              <p>
-                Completed <strong>{lesson.title}</strong> with {lesson.score}%
-                <span className="activity-xp">+{Math.floor(lesson.score)} XP</span>
-              </p>
-              <small>
-                {lesson.date.toLocaleDateString()} • {Math.floor(lesson.timeTaken / 60)}m {Math.round(lesson.timeTaken % 60)}s
-              </small>
+        {completedLessons.length > 0 ? (
+          completedLessons.map(lesson => (
+            <div key={lesson.id} className="activity-item">
+              <div className="activity-icon">📚</div>
+              <div className="activity-details">
+                <p>
+                  Completed <strong>{isMobile ? lesson.title.substring(0, 15) + (lesson.title.length > 15 ? '...' : '') : lesson.title}</strong> 
+                  <span className="activity-score">{lesson.score}%</span>
+                  <span className="activity-xp">+{Math.floor(lesson.score)} XP</span>
+                </p>
+                <small>
+                  {lesson.date.toLocaleDateString()} • {Math.floor(lesson.timeTaken / 60)}m {Math.round(lesson.timeTaken % 60)}s
+                </small>
+              </div>
             </div>
+          ))
+        ) : (
+          <div className="no-activity">
+            <p>No completed lessons yet. Start your cosmic journey!</p>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
 }
 
-
-// Helper components
 function SectionHeader({ title, subtitle }) {
   return (
     <div className="section-header">
