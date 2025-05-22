@@ -642,7 +642,7 @@ function LessonsTab({ isMobile }) {
           completed: isLessonCompleted("calc0")
         },
         {
-          id: "cal1",
+          id: "calc1",
           title: "Space Patterns",
           description: "Predict cosmic events with sequences",
           icon: "🌌",
