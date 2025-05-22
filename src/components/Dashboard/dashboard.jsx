@@ -668,12 +668,8 @@ function LessonsTab({ isMobile }) {
           problems: [
             { question: "If all robots (R) need 2 batteries, and you have 10 batteries, how many robots can run?", 
               answer: 5 },
-            { question: "A spaceship's speed (S) is distance (D) divided by time (T). Write the formula.", 
-              answer: "S=D/T" },
             { question: "If 3x + 2 = 11, find x", 
-              answer: 3 },
-            { question: "True or false: 5 × (3 + 1) = 5 × 3 + 5 × 1", 
-              answer: true }
+              answer: 3 }
           ],
           xpReward: 80,
           prerequisites: ["calc1"],
